@@ -1,8 +1,9 @@
 import os
 
-from flask import Flask, request, redirect, url_for, render_template
+from flask import Flask, cli, request, redirect, url_for, render_template
 from werkzeug.exceptions import abort
 
+from .database.supabase import get_supabase_client, create_game, join_game
 
 def create_app(test_config=None):
     # create and configure the app
@@ -25,7 +26,6 @@ def create_app(test_config=None):
     except OSError:
         pass
 
-    # a simple page that says hello
     @app.route('/', methods=['GET'])
     def intro():
         return render_template('welcome.html')
@@ -34,23 +34,30 @@ def create_app(test_config=None):
     @app.route('/welcome-form', methods=['POST'])
     def welcome_form():
         data = request.form
-        # Extract the necessary information from the form data and save it to the database
-        game_id = data.get('game_id')
+        game_id = data.get('gameId')
         if not game_id or game_id.strip() == "":
-            return redirect(url_for('create_game'))
-        return redirect(url_for('join_game', game_id=game_id))
-        
-        # Here you would typically save the data to the database
-
-
-    ## Create game and join game routes
+            return redirect(url_for('create_game_form'))
+        return redirect(url_for('join', game_id=game_id))
 
     @app.route('/create-game', methods=['GET', 'POST'])
-    def create_game():
-        return 'thank you'
+    def create_game_form():
+        return render_template('create_game.html')
+    
+    @app.route('/create-game-form>', methods=['GET'])
+    def create():
+        data = request.form
+        name = data.get('name', 'Anonymous')
+        categories = data.getlist('categories') or ['Animal', 'Country', 'City', 'Food', 'Movie', 'Famous Person']
+        client = get_supabase_client()
+        game_info = create_game(client, name=name, categories=categories)
+        return f'Game {game_info} created for {name} with categories {", ".join(categories)}'    
     
     @app.route('/join-game/<game_id>', methods=['GET', 'POST'])
-    def join_game(game_id):
+    def join(game_id):
+        if game_id is None or game_id.strip() == "":
+            abort(400, "Game ID is required to join a game.")
+        client = get_supabase_client()
+        join_game(client, game_id)
         return f'Joining game {game_id}'
 
     return app
